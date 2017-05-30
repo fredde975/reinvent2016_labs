@@ -1,0 +1,123 @@
+Lab 2 Pipeline
+
+Task 1.3.1:
+
+cd /home/ec2-user/lab-2-pipeline/src/jenkins
+
+
+Task 1.3.2:
+
+aws ecr create-repository --repository-name jenkins
+
+
+Task 1.3.3:
+
+export JENKINS_REPO_URI=$(aws ecr describe-repositories \
+--repository-names jenkins \
+--query 'repositories[].repositoryUri' --output text)
+
+env | grep JENKINS
+
+Task 1.3.4:
+
+docker build -t ${JENKINS_REPO_URI}:lab-2-pipeline /home/ec2-user/lab-2-pipeline/src/jenkins
+
+Task 1.3.5:
+
+docker images
+
+Task 1.3.6:
+
+docker push ${JENKINS_REPO_URI}:lab-2-pipeline
+
+
+Task 1.3.7:
+
+aws ecr list-images --repository-name jenkins
+
+
+Task 1.4.1:
+
+cat /home/ec2-user/lab-2-pipeline/scripts/jenkins-ecs-service.yaml
+
+
+Task 1.4.2:
+
+aws cloudformation create-stack --stack-name JenkinsService \
+--template-body file:///home/ec2-user/lab-2-pipeline/scripts/jenkins-ecs-service.yaml
+
+
+Task 1.5.2:
+
+less /home/ec2-user/lab-2-pipeline/scripts/microservice-pipeline.yaml
+
+
+Task 1.5.3:
+
+cd /home/ec2-user/lab-2-pipeline
+
+aws cloudformation create-stack \
+--stack-name MustacheMeWebServerPipeline \
+--parameters \
+ParameterKey=MicroserviceName,ParameterValue=MustacheMeWebServer \
+ParameterKey=RepoName,ParameterValue=mustachemewebserver \
+ParameterKey=PortNumber,ParameterValue=8000 \
+--template-body file://scripts/microservice-pipeline.yaml
+
+
+Task 1.5.4:
+
+aws cloudformation wait stack-create-complete \
+--stack-name MustacheMeWebServerPipeline
+
+
+Task 1.5.5:
+export AWS_REGION=$(aws configure get region)
+
+git clone \
+https://git-codecommit.${AWS_REGION}.amazonaws.com/v1/repos/MustacheMeWebServer \
+/home/ec2-user/repos/MustacheMeWebServer
+
+
+Task 1.5.6:
+mv /home/ec2-user/lab-2-pipeline/src/MustacheMe/MustacheMeWebServer/* \
+/home/ec2-user/repos/MustacheMeWebServer/
+
+cd  /home/ec2-user/repos/MustacheMeWebServer
+
+git add -A
+
+git commit -m "Initial commit"
+
+git push -u origin master
+
+
+Task 1.5.8:
+
+cat /home/ec2-user/lab-2-pipeline/scripts/deploy-microservice.sh
+
+
+Task 1.5.10:
+
+cd /home/ec2-user/lab-2-pipeline/scripts/
+
+./deploy-microservice.sh MustacheMeProcessor 8082
+
+./deploy-microservice.sh MustacheMeInfo 8092
+
+
+Task 1.6.1:
+
+cat /home/ec2-user/repos/MustacheMeWebServer/postman-collection.json
+
+
+Task 1.6.2:
+
+less /home/ec2-user/lab-2-pipeline/scripts/microservice-pipeline.yaml
+
+
+Task 1.6.8:
+
+aws cloudformation update-stack --stack-name MustacheMeProcessorPipeline --use-previous-template --parameters ParameterKey=MicroserviceName,UsePreviousValue=true ParameterKey=RepoName,UsePreviousValue=true ParameterKey=PortNumber,UsePreviousValue=true ParameterKey=ExtendedFlag,ParameterValue=true
+
+aws cloudformation update-stack --stack-name MustacheMeInfoPipeline --use-previous-template --parameters ParameterKey=MicroserviceName,UsePreviousValue=true ParameterKey=RepoName,UsePreviousValue=true ParameterKey=PortNumber,UsePreviousValue=true ParameterKey=ExtendedFlag,ParameterValue=true

@@ -1,0 +1,76 @@
+- - Placeholder for the command reference
+
+Task 1.3:
+
+Sample test message for 1.3.7:
+{
+  "DestinationAddress": "321 North Avenue",
+  "DestinationLocation": {
+    "Lat": 34,
+    "Lon": 43
+  },
+  "DispatchedAt": "2016-05-06T13:27:14Z",
+  "DroppedOffAt": "2016-05-04T13:27:14Z",
+  "PickupAddress": "123 Main st.",
+  "PickupLocation": {
+    "Lat": 24,
+    "Lon": 54
+  },
+  "RequestedAt": "2016-04-04T13:27:14Z",
+  "RequestID": "2983745",
+  "UnicornId": 7000,
+  "UserID": "Favorite Customer"
+}
+
+
+Task 2.2:
+
+Code for Lambda Function for 2.2.3:
+
+   console.log('Message to publish to SNS:' + message);
+   sns.publish(params, function(err, data) {
+       if (err) callback(err); // an error occurred
+       else     callback(null, data);           // successful response
+   });
+
+Sample test message for 2.2.16:
+{
+  "DestinationAddress": "321 South Avenue",
+  "DestinationLocation": {
+    "Lat": 34,
+    "Lon": 43
+  },
+  "DispatchedAt": "2016-06-06T13:27:14Z",
+  "DroppedOffAt": "2016-06-04T13:27:14Z",
+  "PickupAddress": "123 Main st.",
+  "PickupLocation": {
+    "Lat": 24,
+    "Lon": 54
+  },
+  "RequestedAt": "2016-06-04T13:27:14Z",
+  "RequestID": "1234567",
+  "UnicornId": 8000,
+  "UserID": "2nd Favorite Customer"
+}
+
+Task 3.2
+
+Sample test message for 3.2.7:
+{
+  "DestinationAddress": "456 West Avenue",
+  "DestinationLocation": {
+    "Lat": 34,
+    "Lon": 43
+  },
+  "DispatchedAt": "2016-06-06T13:27:14Z",
+  "DroppedOffAt": "2016-06-04T13:27:14Z",
+  "PickupAddress": "789 Rainbow St.",
+  "PickupLocation": {
+    "Lat": 24,
+    "Lon": 54
+  },
+  "RequestedAt": "2016-06-04T13:27:14Z",
+  "RequestID": "2938472",
+  "UnicornId": 900,
+  "UserID": "unicornsAreCool"
+}

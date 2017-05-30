@@ -1,0 +1,136 @@
+Lab 4 Security
+
+Task 2.1.1:
+
+git clone https://github.com/awslabs/git-secrets.git
+
+
+Task 2.1.2:
+
+cd /home/ec2-user/git-secrets
+sudo make install
+
+
+Task 2.1.3:
+
+cd /home/ec2-user/repos/MustacheMeInfo
+git secrets --install
+git secrets --register-aws
+
+
+Task 2.1.4:
+
+access_key = 'AKIAI4XJMHBUJWNP2GZQ'
+secret_key = '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'
+
+
+Task 2.1.5:
+
+git add -A .
+git commit -m "Secrets added to source code"
+
+---
+
+Task 3.1.7:
+
+docker run -e TERM=vt100 --net host --pid host --cap-add audit_control \
+    -v /var/lib:/var/lib \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v /usr/lib/systemd:/usr/lib/systemd \
+    -v /var/docker-bench-test:/var/docker-bench-test \
+    -v /etc:/host/etc \
+    --label docker_bench_test \
+    awsbootcamp/docker-bench-test -r
+cat /var/docker-bench-test/results/tests_latest.tap
+
+---
+
+Task 4.1.2:
+
+aws dynamodb create-table --table-name mustache --attribute-definitions AttributeName=imagekey,AttributeType=S --key-schema AttributeName=imagekey,KeyType=HASH --provisioned-throughput ReadCapacityUnits=10,WriteCapacityUnits=10
+
+
+Task 4.1.3:
+
+aws iam create-role --role-name mustache --assume-role-policy-document '{"Version": "2012-10-17","Statement": [{"Sid": "","Effect": "Allow","Principal": {"Service": "ecs-tasks.amazonaws.com"},"Action": "sts:AssumeRole"}]}'
+
+
+Task 4.1.5:
+
+aws iam put-role-policy --role-name mustache --policy-name Dynamo --policy-document '{"Version": "2012-10-17","Statement": [{"Sid": "","Effect": "Allow","Action": ["dynamodb:*"],"Resource": "arn:aws:dynamodb:us-east-1:*:table/mustache"}]}'
+
+
+Task 4.1.9:
+
+client = boto3.client('dynamodb', region_name='us-east-1')
+client.put_item(TableName='mustache', Item={'imagekey': {'S': str(uuid.uuid1())}, 'file': {'S': file.filename}})
+
+
+Task 4.1.10:
+
+TaskRoleArn: "arn:aws:iam::<acount-id>:role/mustache"
+
+
+Task 4.1.11:
+
+git add -A .
+git commit -m "DynamoDB access"
+git push origin master
+
+
+Task 4.1.12:
+
+aws dynamodb scan --table-name mustache
+
+---
+
+Task 5.1.12 
+
+cd /home/ec2-user/repos/MustacheMeProcessor/
+
+
+Task 5.1.13:
+
+RUN useradd -ms /bin/bash nginx && \
+        mkdir /var/supervisord && \
+        chown nginx /var/supervisord && \
+        chown nginx /var/www/forklift/nginx && \
+        chown nginx /var/log/nginx && \
+        chown nginx /var/lib/nginx && \
+        chown nginx /run
+USER nginx
+WORKDIR /var/supervisord
+
+
+Task 5.1.14:
+
+git add -A .
+git commit -m "Security fix"
+git push origin master
+
+
+Task 5.2.5:
+
+cd /home/ec2-user/repos/MustacheMeProcessor/
+
+
+Task 5.2.6:
+
+FROM ubuntu:16.10
+RUN apt-get -y update && \
+    apt-get -y upgrade && \
+    apt-get -y -q install gcc python2.7-dev nginx libjpeg-dev \
+    zlibc zip virtualenv gettext-base python-pip
+RUN rm /etc/nginx/sites-enabled/default
+RUN mkdir -p /var/www/forklift
+RUN cd /var/www/forklift && \
+    virtualenv --python=python2.7 venv && \
+    . venv/bin/activate && \
+    pip install uwsgi numpy geopy flask pillow boto3
+
+
+Task 5.2.7:
+
+git add -A .
+git commit -m "Optional security fix"
+git push origin master

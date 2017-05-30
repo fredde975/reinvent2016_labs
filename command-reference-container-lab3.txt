@@ -1,0 +1,25 @@
+Lab 3 Scale
+
+
+Task 4.1.2
+
+chmod 600 <YOURKEY.PEM>
+
+ssh -i <YOURKEY.PEM> ec2-user@<YOUR EC2 INSTANCE PUBLIC DNS NAME>
+
+
+Task 4.1.3
+
+cd ~/git-repos/mustachemeinfo
+
+
+Task 4.1.4
+
+nano microservice.template
+
+
+Task 4.1.6
+
+git add * && git commit -m "scaling microservice from 1 to 2 tasks" && git push
+
+

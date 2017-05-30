@@ -1,0 +1,319 @@
+Lab 1 Command Reference File
+
+
+Task 2.1.6
+Copy and paste the following code into the code editor for the GetRideDetails function
+
+===================
+begin GetRideDetails
+===================
+
+"use strict";
+
+console.log('Loading function');
+const AWS = require('aws-sdk');
+const lambda = new AWS.Lambda();
+const docClient = new AWS.DynamoDB.DocumentClient();
+
+let config;
+
+exports.handler = (event, context, callback) => {
+    console.log('Received event:', JSON.stringify(event, null, 2));
+
+    init(context).catch(err => {
+        console.error("Error fetching configuration.", JSON.stringify(err, null, 2));
+        callback("[Internal] Error fetching configuration");
+    }).then(config => {
+        const table = config.RidesTable;
+
+        const userId = event.UserId;
+        const rideId = event.RideId;
+
+        if (!userId) {
+            callback("[Forbidden] No user");
+            return;
+        }
+
+        if (!rideId) {
+            callback("[Bad Request] Missing required field: RideId");
+        }
+
+        var params = {
+            TableName: table,
+            KeyConditionExpression: "RideId = :RideId",
+            FilterExpression: "UserId = :UserId",
+            ExpressionAttributeValues: {
+                ":RideId": rideId,
+                ":UserId": userId
+            }
+        };
+
+        return docClient.query(params).promise();
+    }).then((data) => {
+        if (data.Items.length === 0) {
+            console.log("No results returned for " + JSON.stringify(params));
+            callback("[Not Found] Ride " + rideId + " was not found");
+        } else {
+            const result = data.Items[0];
+            console.log("Ride found: " + JSON.stringify(result));
+            callback(null, result);
+        }
+    }).catch((err) => {
+        console.error(err);
+        callback("[Internal] Error querying DynamoDB: " + err.message);
+    });
+}
+
+function init(context) {
+    if(config) {
+        return Promise.resolve(config);
+    } else {
+        const arn = getFunctionArn(context);
+        const params = {
+            TableName: 'ServerlessBootcampConfig',
+            Key: {
+                Function: arn
+            }
+        };
+        return docClient.get(params).promise().then(data => {
+            config = data.Item;
+            return Promise.resolve(config);
+        });
+    }
+}
+
+const ARN_PATTERN = /^(arn:aws:lambda:[^:]+:[^:]+:[^:]+:[^:]+)(?::[^:]+)?$/;
+function getFunctionArn(context) {
+    var match = context.invokedFunctionArn.match(ARN_PATTERN);
+    if(!match) {
+        console.error('Invalid function ARN: ' + functionArn);
+        throw 'Invalid function ARN: ' + functionArn;
+    }
+    return match[1];
+}
+
+===================
+end GetRideDetails
+===================
+
+Task 2.2.11
+Enter the following JSON document for the test event replacing the UserId value with
+the email address you used to register with the site.
+
+{
+  "UserId": "[Your email address]",
+  "RideId": "11111111-1111-1111-111111111111"
+}
+
+
+Task 2.3.16
+Add the following lines to the request mapping template for the GET /rides/{id} method
+
+{
+    "RideId": "$input.params('id')",
+    "UserId": "$context.authorizer.claims.email"
+}
+
+Task 2.4.6
+Add the following integration response entries to your method:
+
+Lambda Error Regex          Method response status
+---------------------------------------------------
+^[BadRequest].*             400
+^[Forbidden].*              403
+^[Not Found].*              404
+^[Internal].*               500
+
+
+Task 3.1.3
+RequestRide test event
+
+{
+  "UserId": "[Your email address]",
+  "PickupLocation": {
+      "Lat": 56.2313,
+      "Lon": 23.4002,
+      "Address": "Pickup address"
+  },
+  "DestinationLocation": {
+      "Lat": 43.9012,
+      "Lon": 54.3342,
+      "Address": "Destination address"
+  }
+}
+
+
+
+Task 3.2.1
+This is a working implementation of the doRequest() function that persists a new ride request to DynamoDB
+
+function doRequest(ride, callback) {
+    var params = {
+        TableName: config.RidesTable,
+        Item: ride
+    }
+
+    docClient.put(params).promise()
+        .then(
+            function(data) {
+                // DynamoDB PUT was successful
+                console.log("Ride created successfully");
+                callback(null, {RideId: ride.RideId});
+            }
+        ).catch(
+            function(err) {
+                // An error occured
+                console.log(err);
+                callback("[Internal] " + err.message);
+            }
+        );
+}
+
+
+Task 3.3.1
+This is a working implementation of the doRequest() function that persists a new ride to DynamoDB
+and invokes the DispatchUnicorn function when complete.
+
+function doRequest(ride, callback) {
+    ride.Unicorn = {}; // Initialize the Unicorn attribute to an empty map so it can be updated later
+    var params = {
+        TableName: config.RidesTable,
+        Item: ride
+    }
+
+    return docClient.put(params).promise().then(data => {
+        // DynamoDB PUT was successful, now dispatch a Unicorn
+        console.log("ride created successfully");
+        var params = {
+            FunctionName: config.DispatchFunction,
+            Payload: JSON.stringify(ride),
+            InvocationType: 'Event'
+        };
+        return lambda.invoke(params).promise();
+    }).then(data => {
+        console.log("Dispatch complete.");
+        return ride;
+    });
+}
+
+
+
+
+The following code is a complete implementation of the RequestRide function.
+You can copy and paste this into the code editor for the RequestRide function if you are having problems completing task 3.2 or 3.3
+
+============================
+begin RequestRide Function
+============================
+
+"use strict";
+
+console.log('Loading function');
+const AWS = require('aws-sdk');
+const lambda = new AWS.Lambda();
+const docClient = new AWS.DynamoDB.DocumentClient();
+const crypto = require('crypto');
+
+let config;
+
+exports.handler = function (event, context, callback) {
+    console.log('Received event:', JSON.stringify(event, null, 2))
+    init(context).catch(err => {
+        console.error("Error fetching configuration.", JSON.stringify(err, null, 2));
+        callback("[Internal] Error fetching configuration");
+    }).then(config => {
+        const ride = {
+            RideId: context.awsRequestId,
+            UserId: event.UserId,
+            RequestedAt: new Date().toISOString(),
+            PickupLocation: event.PickupLocation,
+            DestinationLocation: event.DestinationLocation,
+        }
+
+        if (!ride.UserId) {
+            // Because we're using a custom authorizer the UserId field will
+            // not be populated if the authentication token is missing or invalid
+            callback("[Forbidden] No user");
+            return;
+        }
+
+        if (!ride.PickupLocation || !ride.DestinationLocation) {
+            callback("[Bad Request] Missing required field");
+            return;
+        }
+
+        console.log("Requesting ride " + ride.RideId);
+        return doRequest(ride);
+    }).then(ride => {
+        callback(null, {RideId: ride.RideId });
+    }).catch(err => {
+        console.error("Error while requesting ride");
+        callback("[Internal] " + err.errorMessage);
+    });
+}
+
+/**
+ * Requests a ride by creating a new item in the DynamoDB Rides table and then
+ * invoking the DispatchUnicorn function. The function should invoke the
+ * provided callback on success or failure after the invocation is complete.
+ * This function should not block on the call to the DispatchUnicorn function.
+ *
+ * @param {Object} ride - The details of the requested ride
+ * @param {requestCallback} callback
+ *
+ * @returns A Promise that will resolve to the requested ride
+ */
+function doRequest(ride, callback) {
+    ride.Unicorn = {}; // Initialize the Unicorn attribute to an empty map so it can be updated later
+    var params = {
+        TableName: config.RidesTable,
+        Item: ride
+    }
+
+    return docClient.put(params).promise().then(data => {
+        // DynamoDB PUT was successful, now dispatch a Unicorn
+        console.log("Dispatching Unicorn...");
+        var params = {
+            FunctionName: config.DispatchFunction,
+            Payload: JSON.stringify(ride),
+            InvocationType: 'Event'
+        };
+        return lambda.invoke(params).promise();
+    }).then(data => {
+        console.log("Dispatch complete.");
+        return ride;
+    });
+}
+
+function init(context) {
+    if(config) {
+        return Promise.resolve(config);
+    } else {
+        const arn = getFunctionArn(context);
+        const params = {
+            TableName: 'ServerlessBootcampConfig',
+            Key: {
+                Function: arn
+            }
+        };
+        return docClient.get(params).promise().then(data => {
+            config = data.Item;
+            return Promise.resolve(config);
+        });
+    }
+}
+
+const ARN_PATTERN = /^(arn:aws:lambda:[^:]+:[^:]+:[^:]+:[^:]+)(?::[^:]+)?$/;
+function getFunctionArn(context) {
+    var match = context.invokedFunctionArn.match(ARN_PATTERN);
+    if(!match) {
+        console.error('Invalid function ARN: ' + functionArn);
+        throw 'Invalid function ARN: ' + functionArn;
+    }
+    return match[1];
+}
+
+
+============================
+end RequestRide Function
+============================

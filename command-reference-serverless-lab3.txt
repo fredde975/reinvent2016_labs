@@ -1,0 +1,332 @@
+- - Placeholder for the command reference
+
+Task 1.2:
+
+alertadministrator.js source code:
+
+var AWS = require('aws-sdk');
+
+var region = "<INSERT AWS REGION>";
+
+// The SNS topics to publish the health status to
+var snsTopic = "<INSERT ARN FOR SNS TOPIC>";
+
+
+/**
+ * The main Lambda handler.
+ * @param {Object} event 
+ * @param {Object} context
+ */
+exports.handler = function(event, context) {
+    console.log('Executing alert administrators.');
+    console.log(event);
+    
+    event.Records.forEach(function(record) {
+        health = JSON.parse(record.Sns.Message);
+
+        console.log('Alerting administrators through of SNS');
+        console.log(health);
+        var alert_message = 'We have ' + health.unhealthy.length + ' unhealthy resources.'
+        console.log("Unhealthy count: " + health.unhealthy.length);
+
+        var params = {
+            TopicArn: snsTopic,
+            Subject: 'ALERT',
+            Message: alert_message
+        };
+        console.log("Sending topic: " + params.TopicArn + ", " + region);
+        var sns = new AWS.SNS({region: region});
+        sns.publish(params, function (err, data) {
+            console.log("SNS message sent.");
+            if (err) console.log(err, err.stack); // an error occurred
+            else     console.log(data);           // successful response
+        });
+    });
+
+}
+
+Task 1.3:
+
+SNS Sample JSON Message:
+
+{"healthy":[{"name":"qlstack-ridese-15cezhuo4eoyj","ResourceType":"EsDomain","ClusterStatus.yellow":0,"CPUUtilization":0}],"unhealthy":[{"name":"qlstack2-labinstance-80692-d-TimeSeriesCoordinator-XF3K32S9BH67","ResourceType":"LambdaFunction","Invocations":10,"Duration":0,"Errors":10}],"status":"unhealthy"}
+
+
+Task 2.1:
+
+basicEmailFunction source code:
+
+var AWS = require('aws-sdk');
+ 
+var region = "<INSERT AWS REGION>";
+ 
+/**
+* The main Lambda handler.
+* @param {Object} event 
+ * @param {Object} context
+*/
+exports.handler = function(event, context) {
+    console.log('Executing send basic email notification.');
+ 
+    var ses = new AWS.SES({region: region});
+ 
+    var params = {
+        IdentityType: 'EmailAddress',
+        MaxItems: 100,
+    };
+ 
+    ses.listIdentities(params).promise().then(function(data) {
+        if (data.Identities.length > 0)
+            return data.Identities[0];
+        else {
+            console.log('No email address');
+            return null;
+        }
+    })
+    .then(function(emailaddress) {
+        if (emailaddress) {
+            event.Records.forEach(function(record) {
+                health = JSON.parse(record.Sns.Message);
+                if (health.status=='healthy') {
+                    console.log('E-Mail about healthy status');
+ 
+                    var params = {
+                        Destination: {
+                            ToAddresses: [
+                                emailaddress
+                            ]
+                        },
+                        Source: emailaddress,
+                        Message: {
+                            Subject: {
+                                Data: 'Healthy System'
+                            },
+                            Body: {
+                                Text: {
+                                    Data: 'The system is healthy. Currently tracking ' + health.healthy.length + ' resources.'
+                                }
+                            }
+                        }
+                    };
+ 
+ 
+ 
+                    ses.sendEmail(params, function(err, data) {
+                        if (err) console.log(err, err.stack); // an error occurred
+                        else     console.log(data);           // successful response
+                    });
+ 
+                } else {
+                    console.log('E-Mail about unhealthy status');
+ 
+                    var params = {
+                        Destination: {
+                            ToAddresses: [
+                                emailaddress
+                            ]
+                        },
+                        Source: emailaddress,
+                        Message: {
+                            Subject: {
+                                Data: 'Unhealthy System'
+                            },
+                            Body: {
+                                Text: {
+                                    Data: 'The system is unhealthy. Currently ' + health.unhealthy.length + ' resources unhealthy.'
+                                }
+                            }
+                        }
+                    };
+ 
+ 
+ 
+                    ses.sendEmail(params, function(err, data) {
+                        if (err) console.log(err, err.stack); // an error occurred
+                        else     console.log(data);           // successful response
+                    });
+                }
+            });
+        }
+    })
+    .catch(function(err) {
+        console.log(err);
+    });
+ 
+}
+
+Task 2.2:
+
+Sample Input for Lambda Function for 2.2.8:
+
+
+{
+"Records": [
+    	{ "EventVersion": "1.0",
+      	  "EventSubscriptionArn": "arn:aws:sns:EXAMPLE",
+      	  "EventSource": "aws:sns",
+      	  "Sns": { "Message": "{\"status\":\"healthy\",\"healthy\":[\"healthyFunction1\"]}",
+        		   "Subject": "Healthy"
+      	  }
+    	}
+           ]
+}
+
+Task 4.1
+
+sampleRidesFunction.js source code:
+
+
+/* == Imports == */
+var AWS = require('aws-sdk');
+var path = require('path');
+
+var TOTAL_RIDES_COUNT = 300;
+
+var creds = new AWS.EnvironmentCredentials('AWS');
+
+exports.handler = function(event, context) {
+
+  console.log('Received event:', JSON.stringify(event, null, 2))
+
+
+  var esDomain = {
+    region: "<INSERT AWS REGION>",
+    endpoint: "<INSERT ESDOMAIN URL>",
+    index: 'rides',
+    doctype: 'ride'
+  }; 
+ 
+  var counter = 0;
+
+  setInterval(function() {
+      if (counter >= TOTAL_RIDES_COUNT) {
+          context.done(null, 'Done adding rides. ' + counter + ' rides were added!');
+          return;
+      }
+      
+      counter=counter+1;
+      console.log("Creating ElasticSearch Document: " + counter);
+      var randomRide = createRandomRide(counter);
+      postToES(randomRide,esDomain);
+      
+  }, 100);
+ 
+};
+
+/*
+* Post the given document to Elasticsearch
+*/
+function postToES(doc,esDomain) {
+  var endpoint = new AWS.Endpoint(esDomain.endpoint);
+
+  var req = new AWS.HttpRequest(endpoint);
+
+  req.method = 'POST';
+  req.path = path.join('/', esDomain.index, esDomain.doctype);
+  req.region = esDomain.region;
+  req.headers['presigned-expires'] = false;
+  req.headers['Host'] = endpoint.host;
+  req.body = doc;
+
+  var signer = new AWS.Signers.V4(req , 'es');  // es: service code
+  signer.addAuthorization(creds, new Date());
+
+  var send = new AWS.NodeHttpClient();
+  send.handleRequest(req, null, function(httpResp) {
+      var respBody = '';
+      httpResp.on('data', function (chunk) {
+          respBody += chunk;
+      });
+      httpResp.on('end', function (chunk) {
+          console.log('Response: ' + respBody);
+          return;
+      });
+  }, function(err) {
+      console.log('Error: ' + err);
+      return;
+  });
+}
+
+function createRandomRide(userId) {
+
+  var rideDoc = {
+      RequestID: userId,
+      DestinationAddress: generateAddress(),
+      DestinationLocation: generateLocation(), 
+      PickupAddress: generateAddress(),
+      PickupLocation: generateLocation(), 
+      RequestedAt: generateRandomDate(new Date(2016, 7, 1), new Date()),
+      UserID: "guest-" + userId,
+      DispatchedAt: generateRandomDate(new Date(2016, 7, 1), new Date()),
+      DroppedOffAt: generateRandomDate(new Date(2016, 7, 1), new Date()),
+      FeedbackCount: generateFeedbackCount(),
+      UnicornID: generateUnicornId(), 
+      Color: generateColor(),
+      Size: generateSize(),
+      RideDate: generateRandomDate(new Date(2016, 7, 1), new Date()) 
+    }
+
+  return JSON.stringify(rideDoc);
+}
+
+function generateAddress() {
+  var randomCities = ["321 North Avenue", "322 South Station","11 W 53rd St","15 E 53rd St","1 Main Street","6 Kansas Boulevard"]
+  var randomIndex = Math.floor((Math.random() * 5) + 0); 
+  return randomCities[randomIndex];
+}
+
+function generateLocation() {
+  var randomLat = Math.floor((Math.random() * 90) + 0); 
+  var randomLong = Math.floor((Math.random() * 90) + 0); 
+  var generatelatLong = {  'Lat' : { 'M' : { 'N' : { 'S' : randomLat}}  },  'Lon"' : { 'M' : {'N' : { 'S' : randomLong}    }  }}
+  return generatelatLong;  
+}
+
+function generateRandomDate(start,end) {
+  return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+}
+
+function generateFeedbackCount() {
+  return Math.floor((Math.random() * 5) + 1); 
+}
+
+function generateUnicornId() {
+  return Math.floor((Math.random() * 500) + 100); 
+}
+
+function generateColor() {
+  var randomColors = ["Red", "Green","Blue","Yellow","Orange","Black"]
+  var randomIndex = Math.floor((Math.random() * 5) + 0); 
+  return randomColors[randomIndex]; 
+}
+
+function generateSize() {
+  var randomSizes = ["Extra-Small","Small", "Medium","Large","Extra-Large"]
+  var randomIndex = Math.floor((Math.random() * 4) + 0); 
+  return randomSizes[randomIndex]; 
+}
+
+Task 4.2
+
+Sample input for lambda time series worker:
+
+{
+  "region": "<INSERT AWS REGION>",
+  "endpoint": "https://<INSERT ESDOMAIN URL>/",
+  "index": "rides",
+  "doctype": "ride",
+  "startTime":"2016-08-15T14:12:12",
+  "endTime":"2016-08-24T14:12:12",
+  "searchResultSize": 10
+}
+
+Task 4.3
+
+Sample input for lambda coordinator series worker:
+
+{
+  "endpoint": "<INSERT ENDPOINT HERE>",
+  "workerArn": "<LAMBDA_FUNCTION_ARN>",
+  "startUTC":"2016-08-15T14:12:12",
+  "stopUTC":"2016-08-24T14:12:12"
+}

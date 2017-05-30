@@ -1,0 +1,206 @@
+Lab 4 Command Reference File
+
+
+Task 2.2.1
+Run the following command from the bastion shell.
+You should use the same email address you used in Task 1 to register with the webapp.
+
+inituser you@domain.com
+
+
+Task 2.2.3
+Run the following commands from the mysql prompt within the bastion shell.
+
+DESCRIBE fleet;
+DESCRIBE ride;
+SELECT * FROM ride;
+
+
+
+Task 3.2.2
+Use the following CIDR blocks to create Lambda Subnet A and Lambda Subnet B.
+
+Lambda Subnet A CIDR block: 10.0.0.96/27
+Lambda Subnet B CIDR block: 10.0.0.64/27
+
+
+
+Task 3.4.7
+Copy an paste the following policy document for the VpcLambdaExecutionPolicy.
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Logging",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": ["*"]
+        },
+        {
+            "Sid": "FunctionConfiguration",
+            "Effect": "Allow",
+            "Action": ["dynamodb:GetItem"],
+            "Resource": ["*"]
+        },
+        {
+            "Sid": "LambdaInvocation",
+            "Effect": "Allow",
+            "Action": ["lambda:InvokeFunction"],
+            "Resource": [
+                "*"
+            ]
+        },
+        {
+            "Sid": "EniManagement",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DeleteNetworkInterface"
+            ],
+            "Resource": [
+                "*"
+            ]
+        }
+    ]
+}
+
+Task 4.2.2
+Use the following JSON document to test the ListRides function, replacing the UserId with
+the email address you used to register with the site.
+
+{ "UserId": "you@domain.com" }
+
+
+Task 4.5.4
+Add the following implementation of the initConnection() function to the ListRides Lambda function
+
+function initConnection(context) {
+    if(config) {
+        console.log("Using cached connection");
+        return Promise.resolve(config.connection);
+    } else {
+        return fetchConfig(context).then(c => {
+            config = c;
+            console.log("Creating new connection");
+            config.connection = mysql.createConnection({
+                host     : config.DbHost,
+                user     : "admin",
+                password : config.DbPassword,
+                database : 'wildrydes'
+            });
+            return config.connection;
+        })
+    }
+}
+
+
+
+The following code is a complete implementation of the ListRides function including the connection initialization code.
+You can copy and paste this into the code editor for the ListRides function if you are having problems completing task 4.5
+
+
+================
+begin ListRides
+================
+
+"use strict";
+
+const AWS = require('aws-sdk');
+const docClient = new AWS.DynamoDB.DocumentClient();
+
+const mysql = require('mysql2/promise');
+
+const ARN_PATTERN = /^(arn:aws:lambda:[^:]+:[^:]+:[^:]+:[^:]+)(?::[^:]+)?$/;
+
+let config;
+
+function initConnection(context) {
+    if(config) {
+        console.log("Using cached connection");
+        return Promise.resolve(config.connection);
+    } else {
+        return fetchConfig(context).then(c => {
+            config = c;
+            console.log("Creating new connection");
+            config.connection = mysql.createConnection({
+                host     : config.DbHost,
+                user     : "admin",
+                password : config.DbPassword,
+                database : 'wildrydes'
+            });
+            return config.connection;
+        })
+    }
+}
+
+exports.handler = (event, context, callback) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+
+    initConnection(context).then( conn => {
+        return conn.query(
+        	'SELECT id, pickup_address, pickup_lat, pickup_lon, ' +
+        	'  destination_address, destination_lat, destination_lon, ' +
+        	'  requested_at ' +
+        	'FROM wildrydes.ride ' +
+        	'WHERE user_id = ?',
+        	[event.UserId]
+        );
+    }).then( results => {
+        let rows = results[0];
+        console.log("Query succeeded");
+        console.log(JSON.stringify(rows, null, 2));
+        callback(null, rows.map((row) => {
+            return {
+                RideId: row['id'],
+                PickupAddress: row['pickup_address'],
+                PickupLocation: {
+                    Lat: row.pickup_lat,
+                    Lon: row.pickup_lon
+                },
+                DestinationAddress: row['destination_address'],
+                DestinationLocation: {
+                    Lat: row.destination_lat,
+                    Lon: row.destination_lon
+                },
+                RequestedAt: row['requested_at']
+            };
+        }));
+    }).catch( err => {
+        console.error("Error listing rides:", JSON.stringify(err, null, 2));
+        callback("[Internal] Error listing rides: " + err.message);
+    });
+};
+
+function fetchConfig(context) {
+    var arn = getFunctionArn(context);
+    var params = {
+        TableName: 'ServerlessBootcampConfigLab4',
+        Key: {
+            Function: arn
+        }
+    };
+    console.log("Fetching configuration data");
+    return docClient.get(params).promise().then( data => {
+        console.log("Configuration retrieved successfully: " + JSON.stringify(data.Item));
+        return data.Item;
+    });
+}
+
+function getFunctionArn(context) {
+    var match = context.invokedFunctionArn.match(ARN_PATTERN);
+    if(!match) {
+        console.error('Invalid function ARN: ' + functionArn);
+        throw 'Invalid function ARN: ' + functionArn;
+    }
+    return match[1];
+}
+
+================
+end ListRides
+================
